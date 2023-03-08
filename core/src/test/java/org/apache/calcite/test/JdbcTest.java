@@ -1601,6 +1601,23 @@ public class JdbcTest {
         .returns2("C=1\n");
   }
 
+  /** CALCITE-5566 Tests agg that can't be pushed down. */
+  @Test void testAggPushDown() {
+    CalciteAssert.that()
+        .with(CalciteAssert.Config.FOODMART_CLONE)
+        .query(
+            "select count(*) from (select max(\"position_title\") \"position_title\" from \"foodmart\".\"employee\" "
+                + "where \"gender\" "
+                + "like '%a%' group by \"birth_date\", \"gender\") where \"position_title\" like '%z%'")
+        .enable(CalciteAssert.DB != CalciteAssert.DatabaseInstance.ORACLE)
+        .explainContains("JdbcToEnumerableConverter\n"
+            + "  JdbcAggregate(group=[{}], EXPR$0=[COUNT()])\n"
+            + "    JdbcFilter(condition=[LIKE($2, '%z%')])\n"
+            + "      JdbcAggregate(group=[{8, 15}], position_title=[MAX($5)])\n"
+            + "        JdbcFilter(condition=[LIKE($15, '%a%')])\n"
+            + "          JdbcTableScan(table=[[foodmart, employee]])");
+  }
+
   /** Tests a timestamp literal against JDBC data source. */
   @Test void testJdbcTimestamp() {
     CalciteAssert.that()
